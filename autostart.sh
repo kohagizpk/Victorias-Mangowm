@@ -35,8 +35,8 @@ sleep 0.8
 
 # Resto normal
 waybar -c ~/.config/mango/config.jsonc -s ~/.config/mango/style.css >/dev/null 2>&1 &
-swaybg -o DP-1 -i /home/julia/wallpaper/wallpaper.png >/dev/null 2>&1 &
-swaybg -o HDMI-A-1 -i /home/julia/wallpaper/wallpaper2.png >/dev/null 2>&1 &
+swaybg -o DP-1 -i ~/.config/mango/kohagi_personal_configs/wallpaper/wallpaper.png >/dev/null 2>&1 &
+swaybg -o HDMI-A-1 -i ~/.config/mango/kohagi_personal_configs/wallpaper/wallpaper2.png >/dev/null 2>&1 &
 kanshi &
 #vesktop >/dev/null 2>&1 &        # use só um dos dois
 discord --enable-features=UseOzonePlatform,WebRTCPipeWireCapturer --ozone-platform=wayland &
