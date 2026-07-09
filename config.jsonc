@@ -21,7 +21,7 @@
         "network",
         "temperature",
         "custom/sep",
-        "dwl/window",
+        "mpris",
         "clock",
         "custom/power"
     ],
@@ -126,5 +126,25 @@
         "on-click": "wlogout",
         "on-click-right": "systemctl poweroff",
         "on-click-middle": "systemctl reboot"
+    },
+    "mpris": {
+    "format": "{player_icon} {artist} - {title}",
+    "format-paused": "{status_icon} {artist} - {title}",
+    "on-click": "playerctl play-pause",
+    "on-click-middle": "playerctl previous",
+    "on-click-right": "playerctl next",
+    "player-icons": {
+        "default": "▶",
+        "spotify": "󰓇",
+        "firefox": "󰈹",
+        "chromium": ""
+    },
+    "status-icons": {
+        "playing": "󰐊",
+        "paused": "󰏤",
+        "stopped": "󰓛"
+    },
+    "max-length": 40,
+    "tooltip-format": "{player} : {artist} - {title}"
     }
 }

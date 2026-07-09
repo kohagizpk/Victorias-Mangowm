@@ -1,7 +1,3 @@
-/* ---- 💫 https://github.com/JaKooLit 💫 ---- */
-/* Catppuccin Latte - Wallust */
-/* Original Design by DC user mannatsingh */
-
 @define-color white      	#F2F2F2;
 @define-color black      	#000000;
 @define-color text       	#FFFFFF;
@@ -326,4 +322,19 @@ tooltip {
     color: #444459;
     padding: 0 2px;
     font-size: 90%;
+}
+#mpris.paused {
+    color: #6c7086;
+}
+#group-mpris-controls {
+    background-color: rgba(30, 30, 46, 0.6);
+    border-radius: 20px;
+    padding: 0 4px;
+    margin: 0 4px;
+}
+
+#custom-mpris-prev,
+#custom-mpris-next {
+    color: #cdd6f4;
+    padding: 0 6px;
 }

@@ -6,7 +6,6 @@ export XDG_CURRENT_DESKTOP=wlroots
 export XDG_SESSION_TYPE=wayland
 
 
-# Sem --systemd: dinit não tem systemd, exporta direto pro dbus-daemon
 dbus-update-activation-environment \
     WAYLAND_DISPLAY \
     XDG_CURRENT_DESKTOP \
@@ -16,24 +15,20 @@ dbus-update-activation-environment \
 
 sleep 0.5
 
-# Garante pipewire/wireplumber de pé (sem systemd --user não sobem por socket activation)
 pgrep -x pipewire >/dev/null || pipewire &
 pgrep -x wireplumber >/dev/null || wireplumber &
 pgrep -x pipewire-pulse >/dev/null || pipewire-pulse &
 sleep 0.5
 
-# Matar instâncias antigas dos portais se existirem
 pkill -x xdg-desktop-portal-wlr 2>/dev/null
 pkill -x xdg-desktop-portal 2>/dev/null
 sleep 0.3
 
-# Subir portais na ordem certa
 /usr/lib/xdg-desktop-portal-wlr &
 sleep 0.8
 /usr/lib/xdg-desktop-portal --replace &
 sleep 0.8
 
-# Resto normal
 waybar -c ~/.config/mango/config.jsonc -s ~/.config/mango/style.css >/dev/null 2>&1 &
 swaybg -o DP-1 -i ~/.config/mango/kohagi_personal_configs/wallpaper/wallpaper.png >/dev/null 2>&1 &
 swaybg -o HDMI-A-1 -i ~/.config/mango/kohagi_personal_configs/wallpaper/wallpaper2.png >/dev/null 2>&1 &

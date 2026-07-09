@@ -54,9 +54,40 @@ else
     SOURCE_DIR="$TMP_CLONE/repo"
 fi
 
+# ---------- init system ----------
+detect_init() {
+    if [[ -d /run/systemd/system ]]; then
+        echo systemd
+    elif command -v dinitctl >/dev/null 2>&1 && [[ -d /etc/dinit.d ]]; then
+        echo dinit
+    elif [[ -d /run/openrc ]] || command -v rc-service >/dev/null 2>&1; then
+        echo openrc
+    else
+        echo unknown
+    fi
+}
+
+INIT_SYSTEM="$(detect_init)"
+if [[ "$INIT_SYSTEM" == "unknown" ]]; then
+    warn "Não detectei o init system automaticamente."
+    echo "    1) systemd"
+    echo "    2) OpenRC"
+    echo "    3) dinit"
+    reply=""
+    while [[ "$reply" != "1" && "$reply" != "2" && "$reply" != "3" ]]; do
+        read -rp "Qual você usa? [1-3]: " reply
+    done
+    case "$reply" in
+        1) INIT_SYSTEM="systemd" ;;
+        2) INIT_SYSTEM="openrc" ;;
+        3) INIT_SYSTEM="dinit" ;;
+    esac
+fi
+
 echo -e "${c_bold}Instalador Victorias-Mangowm${c_reset}"
 info "Fonte: $SOURCE_DIR"
 info "Destino: $CONFIG_DIR"
+info "Init system: $INIT_SYSTEM"
 if ! confirm "Começar?"; then
     exit 0
 fi
@@ -93,7 +124,7 @@ PACKAGES=(
 
     nemo pavucontrol
 
-    swaybg kanshi wlr-randr swaync
+    swaybg kanshi wlr-randr
 
     wl-clipboard cliphist wl-clip-persist
 
@@ -119,6 +150,12 @@ PACKAGES=(
     wget
 )
 
+# gerenciamento de sessão/seat: mango (via libseat) precisa de elogind fora do systemd
+case "$INIT_SYSTEM" in
+    openrc) PACKAGES+=(elogind-openrc) ;;
+    dinit)  PACKAGES+=(elogind-dinit) ;;
+esac
+
 step "Pacotes (${#PACKAGES[@]})"
 info "${PACKAGES[*]}"
 if confirm "Instalar tudo agora? (compila pacotes -git do AUR, pode demorar)"; then
@@ -126,6 +163,23 @@ if confirm "Instalar tudo agora? (compila pacotes -git do AUR, pode demorar)"; t
     ok "Pacotes instalados"
 else
     warn "Pulado. O resto do script continua, mas o ambiente só funciona depois de instalar isso manualmente."
+fi
+
+# ---------- seat management (elogind) ----------
+if [[ "$INIT_SYSTEM" != "systemd" ]]; then
+    step "Ativando elogind ($INIT_SYSTEM)"
+    case "$INIT_SYSTEM" in
+        openrc)
+            sudo rc-update add elogind boot || true
+            sudo rc-service elogind start || true
+            log_adapt "elogind habilitado no runlevel boot via rc-update (OpenRC) — necessário pro mango acessar DRM/input via libseat"
+            ;;
+        dinit)
+            sudo dinitctl enable elogind || true
+            log_adapt "elogind habilitado via dinitctl (dinit) — necessário pro mango acessar DRM/input via libseat"
+            ;;
+    esac
+    ok "elogind configurado (se já estava ativo, os comandos acima só confirmam)"
 fi
 
 # ---------- backup + copia das dotfiles ----------
@@ -184,6 +238,11 @@ if [[ -f "$CONFIG_DIR/autostart.sh" ]]; then
     if ! grep -q "swayosd-server" "$CONFIG_DIR/autostart.sh"; then
         sed -i '/pgrep -x pipewire-pulse/a pgrep -x dunst >/dev/null || dunst \&\npgrep -x swayosd-server >/dev/null || swayosd-server \&' "$CONFIG_DIR/autostart.sh"
         log_adapt "autostart.sh: adicionado start de dunst e swayosd-server (usados por volume.sh/brightness.sh mas nunca eram iniciados)"
+    fi
+
+    if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+        sed -i 's/^dbus-update-activation-environment \\$/dbus-update-activation-environment --systemd \\/' "$CONFIG_DIR/autostart.sh"
+        log_adapt "autostart.sh: adicionado --systemd no dbus-update-activation-environment (você está em systemd, propaga as env vars pro systemd --user também)"
     fi
 fi
 
@@ -362,6 +421,7 @@ fi
 
 # ---------- resumo ----------
 step "Concluído"
+info "Init system: $INIT_SYSTEM"
 if [[ "${#ADAPTACOES[@]}" -gt 0 ]]; then
     echo -e "${c_bold}Adaptações feitas (código do repo original tinha isso quebrado/incompleto):${c_reset}"
     for a in "${ADAPTACOES[@]}"; do
