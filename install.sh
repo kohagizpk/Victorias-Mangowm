@@ -93,7 +93,7 @@ PACKAGES=(
 
     nemo pavucontrol
 
-    swaybg kanshi wlr-randr
+    swaybg kanshi wlr-randr swaync
 
     wl-clipboard cliphist wl-clip-persist
 

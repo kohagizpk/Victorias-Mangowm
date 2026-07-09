@@ -39,9 +39,9 @@
         "format": "󰥔 {:%H:%M:%S}",
         "format-alt": "󰃭 {:%d/%m/%Y}",
         "interval": 1,
-        "tooltip": false
+        "tooltip": false,
+        "on-click-right": "~/.config/mango/scripts/calendar.sh"
     },
-
     "cpu": {
         "format": "󰍛 {usage}%",
         "tooltip": false,

@@ -38,7 +38,7 @@ waybar -c ~/.config/mango/config.jsonc -s ~/.config/mango/style.css >/dev/null 2
 swaybg -o DP-1 -i ~/.config/mango/kohagi_personal_configs/wallpaper/wallpaper.png >/dev/null 2>&1 &
 swaybg -o HDMI-A-1 -i ~/.config/mango/kohagi_personal_configs/wallpaper/wallpaper2.png >/dev/null 2>&1 &
 kanshi &
-#vesktop >/dev/null 2>&1 &        # use só um dos dois
+swaync &
 discord --enable-features=UseOzonePlatform,WebRTCPipeWireCapturer --ozone-platform=wayland &
 spotify-launcher &
 helium-browser &
