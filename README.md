@@ -1,3 +1,5 @@
+[showcase](assets/victoria-mangowm.mp4)
+
 ## Dependencies
 
 ```bash
@@ -7,5 +9,8 @@ sudo pacman -Sy kitty wl-clipboard wmenu grim slurp swaybg ttf-jetbrains-mono-ne
 ## Install mango on Arch
 
 ```bash
-yay -S mangowc-git
+yay -S mangowm-git
 ```
+
+The install.sh script still doesn't work perfectly.
+
