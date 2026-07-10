@@ -1,7 +1,7 @@
 #!/bin/bash
 #put this file in ur home
 # Path to image folder
-IMAGE_DIR="$HOME/img_terminal/"
+IMAGE_DIR="$HOME/.config/mango/kohagi_personal_configs/terminal_configs/img_terminal/"
 
 # Set a random image
 RANDOM_IMAGE=$(find "$IMAGE_DIR" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) | shuf -n 1)

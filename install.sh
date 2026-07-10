@@ -1,15 +1,3 @@
-#!/usr/bin/env bash
-#
-# install.sh — instalador do ambiente Victorias-Mangowm
-# Repo: https://github.com/kohagizpk/Victorias-Mangowm
-#
-# Instala o compositor MangoWM + todo o ambiente (waybar, kitty, fish,
-# rofi, fuzzel, wlogout, swayosd, dunst, portais, etc.) e aplica as
-# dotfiles deste repo, corrigindo pontos que não funcionavam como estavam.
-# Lista completa de correções no resumo final do script.
-#
-# Uso: rode de dentro do repo clonado (./install.sh) ou solto (baixa sozinho).
-
 set -euo pipefail
 
 REPO_URL="https://github.com/kohagizpk/Victorias-Mangowm.git"
@@ -92,10 +80,6 @@ if ! confirm "Começar?"; then
     exit 0
 fi
 
-# ---------- systemd-libs dummy (Artix) ----------
-# pacotes do AUR (feitos pra Arch puro) costumam depender de systemd/systemd-libs.
-# No Artix com libelogind isso dá conflito de arquivo; a correção oficial é instalar
-# o artix-archlinux-support, que fornece um systemd/systemd-libs "dummy".
 if [[ "$INIT_SYSTEM" != "systemd" ]] && pacman -Si artix-archlinux-support >/dev/null 2>&1; then
     step "systemd-libs dummy (Artix)"
     sudo pacman -S --needed --noconfirm artix-archlinux-support
@@ -103,7 +87,6 @@ if [[ "$INIT_SYSTEM" != "systemd" ]] && pacman -Si artix-archlinux-support >/dev
     log_adapt "artix-archlinux-support instalado antes do resto -> evita conflito libelogind x systemd-libs em pacotes do AUR (mango, discord, etc. são feitos pra Arch puro)"
 fi
 
-# ---------- AUR helper ----------
 if command -v yay >/dev/null 2>&1; then
     AUR_HELPER="yay"
 elif command -v paru >/dev/null 2>&1; then
@@ -124,8 +107,6 @@ else
 fi
 ok "Usando $AUR_HELPER"
 
-# ---------- pacotes ----------
-# mangowc-git saiu do AUR (renomeado pelo autor) -> pacote certo hoje é mangowm-git
 PACKAGES=(
     mangowm-git
 
@@ -222,7 +203,6 @@ if [[ -f "$CONFIG_DIR/config.jsonc" ]]; then
     log_adapt "waybar (config.jsonc): systemctl poweroff/reboot -> loginctl (não tem systemd)"
 fi
 
-# 2) wlogout: hyprlock/hyprctl (Hyprland) nao existem aqui -> swaylock/mmsg (mango)
 if [[ -f "$CONFIG_DIR/wlogout/layout" ]]; then
     sed -i \
         -e 's/"action" : "hyprlock"/"action" : "swaylock -f"/' \
@@ -231,14 +211,11 @@ if [[ -f "$CONFIG_DIR/wlogout/layout" ]]; then
     log_adapt "wlogout/layout: hyprlock -> swaylock -f, hyprctl dispatch exit -> mmsg -d quit (comandos do Hyprland, não do mango)"
 fi
 
-# 3) keybind do spotify: o pacote spotify-launcher instala o binário "spotify-launcher", não "spotify"
 if [[ -f "$CONFIG_DIR/config.conf" ]]; then
     sed -i 's/bind=SUPER,s,spawn,spotify$/bind=SUPER,s,spawn,spotify-launcher/' "$CONFIG_DIR/config.conf"
     log_adapt "config.conf: bind SUPER+s agora chama spotify-launcher (binário real do pacote)"
 fi
 
-# 4) autostart.sh: caminho do wallpaper apontava pra fora do repo (/home/julia/wallpaper/...)
-#    + dunst e swayosd-server não sobem sozinhos sem systemd --user, precisam de start manual
 if [[ -f "$CONFIG_DIR/autostart.sh" ]]; then
     sed -i \
         -e "s#/home/julia/wallpaper/wallpaper\\.png#${CONFIG_DIR}/kohagi_personal_configs/wallpaper/wallpaper.png#" \
