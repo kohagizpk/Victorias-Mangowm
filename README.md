@@ -1,16 +1,37 @@
-[showcase](assets/victoria-mangowm.mp4)
 
-## Dependencies
+https://github.com/user-attachments/assets/9dbbe4a3-2a75-49df-aee3-562ab775e16b
 
-```bash
-sudo pacman -Sy kitty wl-clipboard wmenu grim slurp swaybg ttf-jetbrains-mono-nerd waybar fish nemo pavucontrol
-```
+| Keybind           | Action                                |
+| ----------------- | ------------------------------------- |
+| SUPER + D         | App launcher (rofi)                   |
+| SUPER + V         | Clipboard history (cliphist + fuzzel) |
+| SUPER + Shift + S | Screenshot                            |
+| SUPER + Enter     | Terminal (kitty)                      |
+| SUPER + E         | File manager (nemo)                   |
+| SUPER + W         | Browser (helium)                      |
+| SUPER + A         | Discord                               |
+| SUPER + S         | Spotify                               |
+| SUPER + F         | Wallpaper selector (waypaper)         |
+| SUPER + Q         | Close active window                   |
+| ALT + F           | Toggle fullscreen                     |
+| ALT + M           | Quit window manager                   |
 
-## Install mango on Arch
 
-```bash
-yay -S mangowm-git
-```
+The install.sh may still not work perfectly
 
-The install.sh script still doesn't work perfectly.
+Tools I used:
+cliphist
+wl-clipboard
+fuzzel (Cliphist)
+rofi (applauncher)
+waybar
+waypaper
+swaync
+swaybg
+grim
+slurp
+wlogout
+kanshi (for 2 monitors)
+fish (shell)
+
 
