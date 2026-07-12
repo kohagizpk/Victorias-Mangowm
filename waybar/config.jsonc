@@ -7,7 +7,6 @@
 
     "modules-left": [
         "ext/workspaces",
-        "dwl/window",
         "custom/sep",
         "pulseaudio#mic",
         "pulseaudio#audio",

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-BASE="/home/julia/.config/mango/kohagi_personal_configs/wlogout"
-TARGET="/home/julia/.config/wlogout"
+BASE="~/.config/mango/kohagi_personal_configs/wlogout"
+TARGET="~/.config/wlogout"
 
 mkdir -p "$TARGET"
 

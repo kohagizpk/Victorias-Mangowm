@@ -38,5 +38,6 @@ spotify &
 helium-browser &
 wl-clip-persist --clipboard regular --reconnect-tries 0 &
 wl-paste --watch cliphist store &
+swayosd-server &
 
 echo "Xft.dpi: 140" | xrdb -merge
