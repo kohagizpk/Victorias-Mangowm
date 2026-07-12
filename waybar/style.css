@@ -9,12 +9,17 @@
 @define-color cyan			rgba(53, 140, 169, 1);
 
 @define-color background-module     @transparent;
-@define-color border-color          @color12;
-@define-color button-color          @color11;
-@define-color button-hover          @color13;
+@define-color border-color          #7F4EA2;
+@define-color color13               #A0536C;
 
-@import 'colors-waybar.css';
-@import "latte.css";
+/* Catppuccin Latte accents (antes em latte.css) */
+@define-color sapphire  #209fb5;
+@define-color mauve     #8839ef;
+@define-color rosewater #dc8a78;
+@define-color sky       #04a5e5;
+@define-color red       #d20f39;
+@define-color yellow    #df8e1d;
+@define-color teal      #179299;
 
 * {
     font-family: "JetBrainsMono Nerd Font";
@@ -67,8 +72,7 @@ tooltip {
     color:#FFFFFF;
 }
 
-#taskbar button,   
-#workspaces button {
+#taskbar button {
     color: #6E6A86;
     box-shadow: none;
 	text-shadow: none;
@@ -79,8 +83,7 @@ tooltip {
     transition: all 0.5s cubic-bezier(.55,-0.68,.48,1.682);
 }
 
-#taskbar button.active,
-#workspaces button.active {
+#taskbar button.active {
     color: #ffd700;
     border-radius: 50%;
     background-color: black;
@@ -91,17 +94,7 @@ tooltip {
     transition: all 0.3s cubic-bezier(.55,-0.68,.48,1.682);
 }
 
-#workspaces button.focused {
-    color: #d8dee9;
-}
-
-#workspaces button.urgent {
-    color: #11111b;
-    border-radius: 10px;
-}
-
-#taskbar button:hover,
-#workspaces button:hover {
+#taskbar button:hover {
     color: #ffd700;
     border-radius: 10px;
  	padding-left: 2px;
@@ -277,11 +270,10 @@ tooltip {
 #swaync{
     color: #ffd700;}
 
-    /* Tags DWL/MangoWM */
-/* Tags DWL/MangoWM */
-#tags button {
+    /* Tags - ext/workspaces (mangowm) */
+#workspaces button {
     padding: 0 7px;
-    color: #444459;
+    color: #cba6f7;
     background: transparent;
     border-radius: 8px;
     font-size: 95%;
@@ -289,7 +281,7 @@ tooltip {
     transition: all 0.2s ease;
 }
 
-#tags button.active {
+#workspaces button.active {
     color: #ffffff;
     background-color: #cba6f7;
     border-radius: 10px;
@@ -297,12 +289,16 @@ tooltip {
     font-weight: bold;
 }
 
-#tags button.occupied:not(.active) {
+#workspaces button.hidden:not(.active) {
+    color: #444459;
+}
+
+#workspaces button.occupied:not(.active) {
     color: #cba6f7;
     border-bottom: 2px solid #cba6f7;
 }
 
-#tags button.urgent {
+#workspaces button.urgent {
     color: #f38ba8;
     background-color: rgba(243, 56, 56, 0.2);
     border-radius: 8px;
@@ -312,7 +308,7 @@ tooltip {
     animation-direction: alternate;
 }
 
-#tags button:hover {
+#workspaces button:hover {
     color: #ffd700;
     background-color: rgba(255, 215, 0, 0.15);
     border-radius: 8px;

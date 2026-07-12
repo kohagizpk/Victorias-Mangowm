@@ -6,7 +6,8 @@
     "spacing": 0,
 
     "modules-left": [
-        "dwl/tags",
+        "ext/workspaces",
+        "dwl/window",
         "custom/sep",
         "pulseaudio#mic",
         "pulseaudio#audio",
@@ -26,11 +27,14 @@
         "custom/power"
     ],
 
-    "dwl/tags": {
-    "num-tags": 9,
-    "tag-labels": ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    "ext/workspaces": {
+        "format": "{name}",
+        "ignore-hidden": false,
+        "on-click": "activate",
+        "on-click-right": "deactivate",
+        "sort-by-id": true
     },
-    
+
     "tray": {
         "spacing": 10
     },
@@ -115,6 +119,7 @@
     
     "dwl/window": {
         "format": "{}",
+        "max-length": 30,
         "rewrite": {
             "": "Desktop"
         }
@@ -146,5 +151,12 @@
     },
     "max-length": 40,
     "tooltip-format": "{player} : {artist} - {title}"
+    },
+
+    "disk": {
+        "interval": 60,
+        "path": "/",
+        "format": "󰋊 {percentage_used}%",
+        "tooltip-format": "{used} usados de {total}"
     }
 }
