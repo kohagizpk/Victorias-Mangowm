@@ -35,14 +35,48 @@ confirm() {
 ADAPTATIONS=()
 log_adapt() { ADAPTATIONS+=("$1"); }
 
+# Moves aside every session entry except mango.desktop, so display managers
+# (ly) only ever list Mango. Reversible: nothing is deleted, just moved.
+strip_other_sessions() {
+    local sessions_backup="/etc/mango-removed-sessions-$(date +%Y%m%d%H%M%S)"
+    local moved=0
+    local dir f
+    for dir in /usr/share/wayland-sessions /usr/share/xsessions; do
+        [[ -d "$dir" ]] || continue
+        for f in "$dir"/*.desktop; do
+            [[ -f "$f" ]] || continue
+            [[ "$(basename "$f")" == "mango.desktop" ]] && continue
+            sudo mkdir -p "${sessions_backup}${dir}"
+            sudo mv "$f" "${sessions_backup}${dir}/"
+            moved=$((moved + 1))
+        done
+    done
+    if [[ "$moved" -gt 0 ]]; then
+        ok "Moved $moved other session entr(y/ies) out of the way (backed up in $sessions_backup)"
+        log_adapt "Removed every login-screen session except Mango (dwl/river/GNOME/etc. were listed too) — moved, not deleted, to $sessions_backup"
+    fi
+}
+
 # ---------- initial checks ----------
 if [[ "${EUID}" -eq 0 ]]; then
     err "Don't run this as root. Run it as your normal user (it will ask for sudo when needed)."
     exit 1
 fi
 
-if ! command -v pacman >/dev/null 2>&1; then
-    err "pacman not found. This script targets Arch/Artix/CachyOS and other pacman-based distros."
+# ---------- distro family ----------
+# Package management, the AUR helper, the display manager service, and the
+# GRUB theme are all handled very differently across these three families.
+# Everything else (deploying and patching the dotfiles themselves) is plain
+# file manipulation and works the same everywhere.
+if [[ -f /etc/NIXOS || -n "${NIX_STORE:-}" ]] || command -v nixos-version >/dev/null 2>&1; then
+    DISTRO_FAMILY="nixos"
+elif command -v pacman >/dev/null 2>&1; then
+    DISTRO_FAMILY="arch"
+elif command -v dnf >/dev/null 2>&1; then
+    DISTRO_FAMILY="fedora"
+else
+    err "Unsupported distro: no pacman, dnf, or NixOS detected."
+    err "This script supports Arch/Artix/CachyOS, Fedora, and NixOS."
     exit 1
 fi
 
@@ -94,26 +128,32 @@ detect_init() {
     fi
 }
 
-INIT_SYSTEM="$(detect_init)"
-if [[ "$INIT_SYSTEM" == "unknown" ]]; then
-    warn "Couldn't auto-detect your init system."
-    echo "    1) systemd"
-    echo "    2) OpenRC"
-    echo "    3) dinit"
-    reply=""
-    while [[ "$reply" != "1" && "$reply" != "2" && "$reply" != "3" ]]; do
-        read -rp "Which one do you use? [1-3]: " reply
-    done
-    case "$reply" in
-        1) INIT_SYSTEM="systemd" ;;
-        2) INIT_SYSTEM="openrc" ;;
-        3) INIT_SYSTEM="dinit" ;;
-    esac
+if [[ "$DISTRO_FAMILY" != "arch" ]]; then
+    # Fedora and NixOS are always systemd-based in practice; skip the prompt.
+    INIT_SYSTEM="systemd"
+else
+    INIT_SYSTEM="$(detect_init)"
+    if [[ "$INIT_SYSTEM" == "unknown" ]]; then
+        warn "Couldn't auto-detect your init system."
+        echo "    1) systemd"
+        echo "    2) OpenRC"
+        echo "    3) dinit"
+        reply=""
+        while [[ "$reply" != "1" && "$reply" != "2" && "$reply" != "3" ]]; do
+            read -rp "Which one do you use? [1-3]: " reply
+        done
+        case "$reply" in
+            1) INIT_SYSTEM="systemd" ;;
+            2) INIT_SYSTEM="openrc" ;;
+            3) INIT_SYSTEM="dinit" ;;
+        esac
+    fi
 fi
 
 echo -e "${c_bold}victoria-mangowm-dotfiles installer${c_reset}"
 info "Source: $SOURCE_DIR"
 info "Target: $CONFIG_DIR"
+info "Distro family: $DISTRO_FAMILY"
 info "Init system: $INIT_SYSTEM"
 if ! confirm "Start?"; then
     exit 0
@@ -123,14 +163,15 @@ fi
 # AUR packages (built for vanilla Arch) commonly depend on systemd/systemd-libs.
 # On Artix with libelogind this causes a file conflict; the official fix is to
 # install artix-archlinux-support, which provides dummy systemd/systemd-libs.
-if [[ "$INIT_SYSTEM" != "systemd" ]] && pacman -Si artix-archlinux-support >/dev/null 2>&1; then
+if [[ "$DISTRO_FAMILY" == "arch" && "$INIT_SYSTEM" != "systemd" ]] && pacman -Si artix-archlinux-support >/dev/null 2>&1; then
     step "systemd-libs dummy (Artix)"
     sudo pacman -S --needed --noconfirm artix-archlinux-support
     ok "artix-archlinux-support installed"
     log_adapt "Installed artix-archlinux-support before anything else -> avoids the libelogind vs systemd-libs conflict when installing AUR packages built for vanilla Arch (mango, discord, etc.)"
 fi
 
-# ---------- AUR helper ----------
+# ---------- AUR helper (Arch family only) ----------
+if [[ "$DISTRO_FAMILY" == "arch" ]]; then
 if command -v yay >/dev/null 2>&1; then
     AUR_HELPER="yay"
 elif command -v paru >/dev/null 2>&1; then
@@ -159,8 +200,10 @@ else
     fi
 fi
 ok "Using $AUR_HELPER"
+fi
 
-# ---------- packages ----------
+# ---------- packages: Arch family ----------
+if [[ "$DISTRO_FAMILY" == "arch" ]]; then
 PACKAGES=(
     # compositor
     mangowm-git
@@ -199,7 +242,7 @@ PACKAGES=(
     xorg-xwayland
 
     # fonts
-    ttf-jetbrains-mono-nerd
+    ttf-jetbrains-mono-nerd noto-fonts-emoji
 
     # GTK theming (materia-dark, applied like nwg-look would)
     materia-gtk-theme
@@ -255,19 +298,20 @@ fi
 # ---------- display manager (ly) ----------
 step "Display manager (ly)"
 
-# Create a Wayland session entry so ly (or any other display manager) can
-# list Mango, in case the mangowm-git package doesn't ship one.
-if [[ ! -f /usr/share/wayland-sessions/mango.desktop ]]; then
-    sudo mkdir -p /usr/share/wayland-sessions
-    sudo tee /usr/share/wayland-sessions/mango.desktop >/dev/null <<'LYEOF'
+# Wayland session entry so ly (or any other display manager) can list
+# Mango, in case the mangowm-git package doesn't ship one. dbus-run-session
+# wraps mango in its own D-Bus session, which it needs when launched from a
+# display manager instead of a TTY.
+sudo mkdir -p /usr/share/wayland-sessions
+sudo tee /usr/share/wayland-sessions/mango.desktop >/dev/null <<'LYEOF'
 [Desktop Entry]
 Name=Mango
 Comment=MangoWM, a dwl-based Wayland compositor
-Exec=mango
+Exec=dbus-run-session mango
 Type=Application
 LYEOF
-    log_adapt "Created /usr/share/wayland-sessions/mango.desktop so display managers can list Mango as a session"
-fi
+log_adapt "Created/updated /usr/share/wayland-sessions/mango.desktop (dbus-run-session mango) so display managers can list Mango as a session"
+strip_other_sessions
 
 case "$INIT_SYSTEM" in
     systemd)
@@ -291,9 +335,9 @@ case "$INIT_SYSTEM" in
         fi
 
         if [[ "$enable_ly" -eq 1 ]]; then
-            sudo systemctl enable ly.service
-            ok "ly enabled as the display manager"
-            log_adapt "Installed and enabled ly.service as the display manager — Mango now shows up as a selectable session on the login screen"
+            sudo systemctl enable ly@tty2.service
+            ok "ly enabled as the display manager (ly@tty2.service)"
+            log_adapt "Installed and enabled ly@tty2.service as the display manager — Mango now shows up as a selectable session on the login screen"
         fi
         ;;
 
@@ -345,6 +389,184 @@ case "$INIT_SYSTEM" in
         info "If ly crash-loops with a VT/console error, it's likely the same kind of getty-vs-ly console conflict as on dinit — check what's running on the tty ly wants (usually tty2) with 'rc-status' and free it up in your getty config."
         ;;
 esac
+fi
+
+# ---------- packages: Fedora ----------
+if [[ "$DISTRO_FAMILY" == "fedora" ]]; then
+    step "Terra repository (mango's package lives here)"
+    if ! dnf repolist 2>/dev/null | grep -qi terra; then
+        sudo dnf install -y --nogpgcheck --repofrompath \
+            'terra,https://repos.fyralabs.com/terra$releasever' terra-release
+        ok "Terra repo added"
+    else
+        ok "Terra repo already enabled"
+    fi
+
+    # Best-effort package list: most Wayland-ecosystem tools use the same
+    # name in Fedora's repos as in Arch's. A few things are Arch/AUR-only
+    # (helium-browser, the AUR "spotify" build, ttf-jetbrains-mono-nerd's
+    # Arch-specific bundling) and have no dnf equivalent — those are handled
+    # separately below (Flatpak, or a manual note) instead of guessed at.
+    FEDORA_PACKAGES=(
+        mangowm
+        waybar rofi fuzzel foot kitty fish fastfetch
+        nemo pavucontrol nwg-look
+        swaybg waypaper kanshi wlr-randr
+        grim slurp
+        dunst swaync libnotify
+        swayosd brightnessctl pamixer swayidle
+        wlogout wlsunset
+        xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk
+        xorg-x11-server-Xwayland
+        jetbrains-mono-fonts google-noto-emoji-color-fonts
+        pipewire pipewire-pulseaudio wireplumber
+        discord
+        wget jq
+    )
+
+    step "Packages (${#FEDORA_PACKAGES[@]})"
+    info "${FEDORA_PACKAGES[*]}"
+    warn "This list is best-effort: most of these are the same name in Fedora's repos as in Arch's, but it isn't as thoroughly verified as the Arch package list. Anything that fails to install is reported at the end instead of stopping the script."
+    FEDORA_FAILED=()
+    if confirm "Install everything now?"; then
+        for pkg in "${FEDORA_PACKAGES[@]}"; do
+            if ! sudo dnf install -y "$pkg"; then
+                FEDORA_FAILED+=("$pkg")
+            fi
+        done
+        if [[ "${#FEDORA_FAILED[@]}" -gt 0 ]]; then
+            warn "Couldn't install: ${FEDORA_FAILED[*]} — check the exact package name for your Fedora version and install those by hand."
+        else
+            ok "All packages installed"
+        fi
+    else
+        warn "Skipped. The rest of the script continues, but the environment won't fully work until these are installed manually."
+    fi
+
+    step "swaylock-effects (needs a COPR repo on Fedora)"
+    if confirm "Enable the eddsalkield/swaylock-effects COPR and install it?"; then
+        sudo dnf copr enable -y eddsalkield/swaylock-effects || true
+        sudo dnf install -y swaylock-effects || warn "swaylock-effects install failed; falling back to plain swaylock."
+        sudo dnf install -y swaylock || true
+    fi
+
+    step "materia-gtk-theme"
+    sudo dnf install -y materia-gtk-theme 2>/dev/null || warn "materia-gtk-theme isn't in Fedora's repos on this release; the GTK settings below will still point to it, install it manually (e.g. from a COPR) if it doesn't show up."
+
+    step "cliphist, wl-clipboard, wl-clip-persist, xfce-polkit, wmenu"
+    for pkg in cliphist wl-clipboard wl-clip-persist xfce4-polkit wmenu; do
+        sudo dnf install -y "$pkg" || warn "$pkg not found under that name in your Fedora repos — search 'dnf search $pkg' and adjust by hand."
+    done
+
+    step "ly (display manager)"
+    if sudo dnf install -y ly; then
+        sudo mkdir -p /usr/share/wayland-sessions
+        sudo tee /usr/share/wayland-sessions/mango.desktop >/dev/null <<'LYEOF'
+[Desktop Entry]
+Name=Mango
+Comment=MangoWM, a dwl-based Wayland compositor
+Exec=dbus-run-session mango
+Type=Application
+LYEOF
+        log_adapt "Created/updated /usr/share/wayland-sessions/mango.desktop (dbus-run-session mango) so display managers can list Mango as a session"
+        strip_other_sessions
+        other_dm=""
+        for dm in gdm sddm lightdm lxdm; do
+            if systemctl is-enabled "${dm}.service" >/dev/null 2>&1; then
+                other_dm="$dm"
+                break
+            fi
+        done
+        enable_ly=1
+        if [[ -n "$other_dm" ]]; then
+            warn "${other_dm}.service is already enabled as your display manager."
+            if confirm "Disable ${other_dm} and switch to ly?"; then
+                sudo systemctl disable "${other_dm}.service" || true
+            else
+                enable_ly=0
+            fi
+        fi
+        if [[ "$enable_ly" -eq 1 ]]; then
+            sudo systemctl enable ly@tty2.service
+            ok "ly enabled as the display manager (ly@tty2.service)"
+            log_adapt "Installed and enabled ly@tty2.service as the display manager — Mango now shows up as a selectable session on the login screen"
+        fi
+    else
+        warn "ly isn't available in your Fedora repos; use GDM/SDDM with the Mango session entry created above, or install ly from source."
+    fi
+
+    step "Discord & Spotify (Flatpak)"
+    info "Fedora's repos don't carry Discord/Spotify; the repo's autostart.sh and keybinds expect the 'discord' and 'spotify' commands."
+    if command -v flatpak >/dev/null 2>&1 || confirm "Install Flatpak, then Discord and Spotify through it?"; then
+        command -v flatpak >/dev/null 2>&1 || sudo dnf install -y flatpak
+        flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+        flatpak install -y flathub com.discordapp.Discord com.spotify.Client || true
+        mkdir -p "$HOME/.local/bin"
+        printf '#!/bin/sh\nexec flatpak run com.discordapp.Discord "$@"\n' | sudo tee /usr/local/bin/discord >/dev/null
+        printf '#!/bin/sh\nexec flatpak run com.spotify.Client "$@"\n' | sudo tee /usr/local/bin/spotify >/dev/null
+        sudo chmod +x /usr/local/bin/discord /usr/local/bin/spotify
+        log_adapt "Discord and Spotify installed via Flatpak, with /usr/local/bin/discord and /usr/local/bin/spotify wrapper scripts so the repo's existing 'discord'/'spotify' commands keep working unchanged"
+    else
+        warn "Skipped. Install Discord/Spotify yourself and make sure 'discord' and 'spotify' resolve to something, or edit config.conf/autostart.sh."
+    fi
+
+    warn "helium-browser has no Fedora package; the repo's helium-browser keybind/autostart line will do nothing until you install it manually or swap it for another browser."
+fi
+
+# ---------- packages: NixOS ----------
+if [[ "$DISTRO_FAMILY" == "nixos" ]]; then
+    step "NixOS: generating a config snippet instead of installing packages"
+    info "NixOS manages packages and services declaratively — this script won't run 'nix-env -i' or 'systemctl enable' behind your back."
+    info "It writes a snippet with everything this setup needs; add it to your flake/configuration.nix and rebuild."
+
+    NIX_SNIPPET="$HOME/mango-nixos-snippet.nix"
+    cat > "$NIX_SNIPPET" <<'NIXEOF'
+# Generated by victoria-mangowm-dotfiles install.sh
+# Merge this into your flake.nix / configuration.nix and run nixos-rebuild switch.
+#
+# 1) flake.nix inputs:
+#      mangowm = {
+#        url = "github:mangowm/mango";
+#        inputs.nixpkgs.follows = "nixpkgs";
+#      };
+#
+# 2) In your NixOS module imports:
+#      imports = [ inputs.mangowm.nixosModules.mango ];
+#      programs.mango.enable = true;
+#
+# 3) Login (pick ONE from https://mangowm.github.io/docs/installation#nixos):
+#      services.greetd.enable = true;               # TUI greeter, or
+#      services.displayManager.defaultSession = "mango";  # with an existing DM (ly/gdm/sddm), or
+#      services.getty.autologinUser = "your-username"; environment.loginShellInit = ''[ "$(tty)" = /dev/tty1 ] && exec mango'';
+#
+# 4) Packages (best-effort names; check `nix search nixpkgs <name>` for anything missing):
+{ pkgs, ... }: {
+  environment.systemPackages = with pkgs; [
+    waybar rofi fuzzel foot kitty fish fastfetch
+    nemo pavucontrol nwg-look
+    swaybg waypaper kanshi wlr-randr
+    grim slurp
+    dunst swaync libnotify
+    swayosd brightnessctl pamixer swayidle swaylock-effects
+    xfce-polkit wlogout wlsunset
+    xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk
+    xwayland
+    jetbrains-mono
+    noto-fonts-emoji
+    materia-theme
+    pipewire wireplumber
+    discord spotify
+    wget jq
+  ];
+}
+NIXEOF
+    ok "Wrote $NIX_SNIPPET"
+    log_adapt "NixOS: package installation and display-manager setup were NOT done imperatively — a config snippet was written to $NIX_SNIPPET instead. Add it to your flake/configuration.nix and run nixos-rebuild switch."
+    warn "The GRUB theme step (ultragrub) is skipped below too — NixOS manages the bootloader declaratively via boot.loader.grub.* and would just overwrite anything ultragrub does to /etc/grub.d on the next rebuild."
+    if ! confirm "Continue and deploy the dotfiles to $CONFIG_DIR now? (This part is just files, it's independent of the Nix config above.)"; then
+        exit 0
+    fi
+fi
 
 # ---------- copy dotfiles (only if we're not already operating in place) ----------
 if [[ "$IN_PLACE" -eq 1 ]]; then
@@ -395,17 +617,17 @@ if [[ -f "$WLOGOUT_LAYOUT" ]]; then
     log_adapt "config/wlogout/layout: hyprlock -> swaylock -f, hyprctl dispatch exit -> mmsg dispatch quit (those were Hyprland commands, not mango's; mmsg syntax updated for >= 0.14.0)"
 fi
 
-# 3) wlogout-theme.sh: BASE/TARGET used a quoted "~", which bash does NOT expand
-#    inside double quotes -> the script was silently operating on a literal
-#    "~/..." path that doesn't exist. Use $HOME instead, which does expand.
+# 3) wlogout-theme.sh: BASE/TARGET have gone through several broken states
+#    across repo edits (a quoted "~", which bash never expands; a hardcoded
+#    /home/julia; and, most recently, still pointing at the old
+#    kohagi_personal_configs/wlogout folder after it was renamed to
+#    config/wlogout). Normalize both regardless of which state it's in.
 if [[ -f "$WLOGOUT_THEME_SCRIPT" ]]; then
-    sed -i \
-        -e 's#BASE="~/\.config/mango/config/wlogout"#BASE="$HOME/.config/mango/config/wlogout"#' \
-        -e 's#TARGET="~/\.config/wlogout"#TARGET="$HOME/.config/wlogout"#' \
-        -e 's#BASE="/home/julia/\.config/mango/config/wlogout"#BASE="$HOME/.config/mango/config/wlogout"#' \
-        -e 's#TARGET="/home/julia/\.config/wlogout"#TARGET="$HOME/.config/wlogout"#' \
+    sed -i -E \
+        -e 's#^BASE=".*/\.config/mango/(kohagi_personal_configs|config)/wlogout"#BASE="'"${CONFIG_DIR}"'/config/wlogout"#' \
+        -e 's#^TARGET=".*/\.config/wlogout"#TARGET="'"${HOME}"'/.config/wlogout"#' \
         "$WLOGOUT_THEME_SCRIPT"
-    log_adapt "scripts/wlogout-theme.sh: BASE/TARGET now use \$HOME instead of a hardcoded /home/julia path or a quoted ~ (which bash never expands inside quotes)"
+    log_adapt "scripts/wlogout-theme.sh: BASE/TARGET normalized to \$CONFIG_DIR/config/wlogout and \$HOME/.config/wlogout (the file has pointed at a quoted ~, a hardcoded /home/julia, and the old kohagi_personal_configs path across different repo revisions)"
     # run it once now so ~/.config/wlogout is populated immediately
     bash "$WLOGOUT_THEME_SCRIPT" >/dev/null 2>&1 || true
 fi
@@ -431,14 +653,17 @@ POLKITEOF
         log_adapt "scripts/autostart.sh: added a polkit agent startup (xfce-polkit) — nothing was providing GUI privilege prompts before"
     fi
 
-    if grep -qx 'waypaper --restore &' "$AUTOSTART" && ! grep -q 'swaybg -i' "$AUTOSTART"; then
+    WALLPAPER_FALLBACK="$(find "$CONFIG_DIR/config" -maxdepth 2 -iname 'wallpaper*.png' -o -iname 'wallpaper*.jpg' 2>/dev/null | head -1)"
+    if grep -qx 'waypaper --restore &' "$AUTOSTART" && ! grep -q 'swaybg -i' "$AUTOSTART" && [[ -n "$WALLPAPER_FALLBACK" ]]; then
         sed -i '/^waypaper --restore &$/c\
 if [ -f "$HOME/.config/waypaper/config.ini" ]; then\
     waypaper --restore \&\
 else\
-    swaybg -i "'"${CONFIG_DIR}"'/config/wallpaper/wallpaper.png" \&\
+    swaybg -i "'"${WALLPAPER_FALLBACK}"'" \&\
 fi' "$AUTOSTART"
-        log_adapt "scripts/autostart.sh: waypaper --restore does nothing on a fresh install (no saved state yet) -> falls back to swaybg with the bundled wallpaper so you get one immediately"
+        log_adapt "scripts/autostart.sh: waypaper --restore does nothing on a fresh install (no saved state yet) -> falls back to swaybg with a bundled wallpaper so you get one immediately"
+    elif [[ -z "$WALLPAPER_FALLBACK" ]]; then
+        info "No wallpaper image bundled in the repo right now, so no swaybg fallback was set up — the desktop will have no wallpaper until you pick one with SUPER+F (waypaper)."
     fi
 
     if [[ "$INIT_SYSTEM" == "systemd" ]]; then
@@ -513,13 +738,17 @@ if [[ -f "$CONFIG_DIR/config.conf" ]] && grep -qx '=id:1,layout_name:scroller' "
     log_adapt "config.conf: commented out the line '=id:1,layout_name:scroller' (missing the 'tagrule=' prefix, had no effect and could confuse the parser). If you actually wanted tag 1 on the scroller layout instead of tile, let me know and I'll fix it properly."
 fi
 
-# 8) config.conf: the SUPER+A keybind launches plain "discord", without the
-#    Wayland/PipeWire flags that autostart.sh already uses. Screen sharing
-#    only works with those flags, so any Discord window opened via this bind
-#    (instead of the one autostart launched) would have broken screen share.
+# 8) Discord screen sharing needs --ozone-platform=wayland and the PipeWire
+#    capturer feature flag. Both scripts.sh/autostart.sh's "discord &" and
+#    config.conf's SUPER+A bind have gone back and forth between having these
+#    flags and not across repo edits — force them on in both places.
+if [[ -f "$AUTOSTART" ]] && grep -qx 'discord &' "$AUTOSTART"; then
+    sed -i 's/^discord &$/discord --enable-features=UseOzonePlatform,WebRTCPipeWireCapturer --ozone-platform=wayland \&/' "$AUTOSTART"
+    log_adapt "scripts/autostart.sh: discord now launches with --ozone-platform=wayland + WebRTCPipeWireCapturer (screen sharing silently breaks without these)"
+fi
 if [[ -f "$CONFIG_DIR/config.conf" ]] && grep -qx 'bind=SUPER,a,spawn,discord' "$CONFIG_DIR/config.conf"; then
     sed -i 's/^bind=SUPER,a,spawn,discord$/bind=SUPER,a,spawn,discord --enable-features=UseOzonePlatform,WebRTCPipeWireCapturer --ozone-platform=wayland/' "$CONFIG_DIR/config.conf"
-    log_adapt "config.conf: SUPER+A now launches Discord with the same --ozone-platform=wayland/PipeWire flags as autostart.sh, so screen sharing works no matter how you opened it"
+    log_adapt "config.conf: SUPER+A now launches Discord with the same --ozone-platform=wayland/PipeWire flags, so screen sharing works no matter how you opened it"
 fi
 
 # 9) xdg-desktop-portal: with both -wlr and -gtk backends installed, explicitly
@@ -647,50 +876,37 @@ FASTFETCH_SRC="$CONFIG_DIR/config/terminal_configs/fastfetch.jsonc"
 if [[ -f "$FASTFETCH_SRC" ]]; then
     mkdir -p "$HOME/.config/fastfetch"
     cp "$FASTFETCH_SRC" "$HOME/.config/fastfetch/config.jsonc"
-    # the referenced ascii.txt doesn't exist in the repo; without this fix
-    # fastfetch's logo would break. Removing the line falls back to the
-    # distro's own auto-detected logo, which just works.
-    sed -i '\#"source": "~/.config/fastfetch/ascii.txt"#d' "$HOME/.config/fastfetch/config.jsonc"
     ok "~/.config/fastfetch/config.jsonc"
-    log_adapt "fastfetch: the custom logo (ascii.txt) doesn't exist in the repo -> removed, falls back to the distro's automatic logo"
-fi
+    # fastfetch's logo now points at config/terminal_configs/img_terminal
+    # (deployed automatically as part of the repo copy) instead of the old
+    # broken ascii.txt reference. Just a sanity check in case that ever
+    # changes again — don't mutate the file, just warn.
+    logo_src="$(grep -o '"source": *"[^"]*"' "$HOME/.config/fastfetch/config.jsonc" | head -1 | sed -E 's/.*"source": *"([^"]*)"/\1/')"
+    logo_src_expanded="${logo_src/#\~/$HOME}"
+    logo_src_expanded="${logo_src_expanded%\*}"
+    if [[ -n "$logo_src_expanded" && ! -e "$logo_src_expanded" ]]; then
+        warn "fastfetch's logo source ($logo_src) doesn't exist -> it'll fall back to the distro's automatic logo instead."
+    fi
 
-# ---------- terminal welcome image ----------
-step "Terminal image"
-mkdir -p "$HOME/img_terminal"
-EXAMPLE_IMG="$CONFIG_DIR/config/terminal_configs/img_terminal/example.png"
-if [[ -f "$EXAMPLE_IMG" && -z "$(ls -A "$HOME/img_terminal" 2>/dev/null)" ]]; then
-    cp "$EXAMPLE_IMG" "$HOME/img_terminal/"
-    ok "Example image copied to ~/img_terminal/"
-    log_adapt "~/img_terminal/ was empty -> seeded with the repo's bundled example.png so random_image.sh has something to show immediately"
-else
-    ok "~/img_terminal/ ready (add your own images any time)"
-fi
-
-# ---------- random_image.sh + fish ----------
-step "Configuring the terminal welcome script"
-RANDIMG_SRC="$CONFIG_DIR/config/terminal_configs/random_image.sh"
-if [[ -f "$RANDIMG_SRC" ]]; then
-    cp "$RANDIMG_SRC" "$HOME/random_image.sh"
-    chmod +x "$HOME/random_image.sh"
-    ok "~/random_image.sh"
-
+    # Nothing in the repo calls fastfetch automatically anymore (the old
+    # random_image.sh wrapper that used to do this was removed once
+    # fastfetch's own kitty logo took over showing the image). Wire it into
+    # fish directly so new terminals still get the welcome screen.
     FISH_CONFIG="$HOME/.config/fish/config.fish"
     mkdir -p "$HOME/.config/fish"
     touch "$FISH_CONFIG"
-    if ! grep -q "random_image.sh" "$FISH_CONFIG"; then
+    if ! grep -q "fastfetch" "$FISH_CONFIG"; then
         cat >> "$FISH_CONFIG" <<'EOF'
 
-# victoria-mangowm-dotfiles: random image + fastfetch on every new terminal
+# victoria-mangowm-dotfiles: fastfetch on every new terminal
 if status is-interactive
-    and test -f "$HOME/random_image.sh"
-    bash "$HOME/random_image.sh"
+    fastfetch
 end
 EOF
-        ok "Hooked into ~/.config/fish/config.fish"
-        log_adapt "fish: random_image.sh was never actually called by anything -> now runs automatically in every interactive shell"
+        ok "Hooked fastfetch into ~/.config/fish/config.fish"
+        log_adapt "fish: nothing called fastfetch automatically anymore after random_image.sh was removed from the repo -> now runs on every interactive shell directly"
     else
-        info "~/.config/fish/config.fish already calls random_image.sh"
+        info "~/.config/fish/config.fish already calls fastfetch"
     fi
 fi
 
@@ -718,6 +934,7 @@ if [[ -d "$CURSOR_SRC" ]]; then
     mkdir -p "$HOME/.local/share/icons"
     rm -rf "$CURSOR_DST"
     cp -a "$CURSOR_SRC" "$CURSOR_DST"
+    find "$CURSOR_DST" -maxdepth 1 -name '.~lock.*#' -delete 2>/dev/null
     ok "Cursor copied from the repo to $CURSOR_DST"
     log_adapt "Cursor: the Animated-Mew-Cursor theme now ships in the repo -> copied to ~/.local/share/icons/"
 
@@ -738,7 +955,9 @@ fi
 
 # ---------- GRUB (ultragrub: theme + boot entry patch) ----------
 ULTRAGRUB_DIR="$CONFIG_DIR/config/ultragrub"
-if [[ -d "$ULTRAGRUB_DIR" ]]; then
+if [[ "$DISTRO_FAMILY" == "nixos" ]]; then
+    : # already explained above: skipped, NixOS owns /etc/grub.d
+elif [[ -d "$ULTRAGRUB_DIR" ]]; then
     step "GRUB theme (UltraGrub)"
     warn "This step touches /etc/default/grub and the scripts in /etc/grub.d (your bootloader)."
     if confirm "Install the GRUB theme and patch the boot entries (cleans up the Windows entry, etc.)?"; then
@@ -812,3 +1031,5 @@ info "The Animated-Mew-Cursor theme, if it wasn't already installed (see the war
 info "Pick a wallpaper with SUPER+F (waypaper) any time you want to change it"
 echo
 info "To start: log in on a TTY and run 'mango'"
+set -U fish_greeting
+sudo systemctl start ly@tty2.service

@@ -2,7 +2,7 @@
 
 Personal dotfiles for a [mango](https://github.com/DreamMaoMao/mango) (dwl-based Wayland compositor) desktop, tuned for Arch-based systems. Styled with Waybar, a full Wayland utility stack, and an installer that adapts itself to your init system.
 
-https://github.com/user-attachments/assets/9dbbe4a3-2a75-49df-aee3-562ab775e16b
+https://github.com/user-attachments/assets/cb902017-0d69-4222-970d-5467773197c4
 
 ## Features
 
@@ -22,11 +22,13 @@ https://github.com/user-attachments/assets/9dbbe4a3-2a75-49df-aee3-562ab775e16b
 
 ## Keybindings
 
-| Keybind            | Action                                |
+| Keybind            | Action                                 |
 | ------------------ | -------------------------------------- |
 | SUPER + D          | App launcher (rofi)                    |
+| SUPER + 1...9      | Change workspace                       |
+| ALT + 1..9         | Move program to workspace              |
 | SUPER + V          | Clipboard history (cliphist + fuzzel)  |
-| SUPER + Shift + S   | Screenshot                             |
+| SUPER + Shift + S  | Screenshot                             |
 | SUPER + Enter      | Terminal (kitty)                       |
 | SUPER + E          | File manager (nemo)                    |
 | SUPER + W          | Browser (helium)                       |
@@ -46,12 +48,8 @@ https://github.com/user-attachments/assets/9dbbe4a3-2a75-49df-aee3-562ab775e16b
 ## How to install?
 
 ```bash
-cd
-mkdir .config
-cd .config
 git clone https://github.com/kohagizpk/victoria-mangowm-dotfiles.git
-mv victoria-mangowm-dotfiles mango
-cd mango
+cd victoria-mangowm-dotfiles
 chmod +x install.sh
 ./install.sh
 ```
@@ -70,15 +68,14 @@ The script is interactive and will ask for confirmation before any potentially d
 
 ```
 .
-├── assets/                  # Media used in this README
-├── kohagi_personal_configs/ # Wallpapers, terminal config, cursor theme, kanshi profile, GRUB theme
-├── scripts/                 # Helper scripts (print, wlogout, calendar etc.)
-├── waybar/                  # Waybar config and stylesheet
-├── config.conf              # Main mango compositor config
-└── install.sh               # Automated installer
+├── assets/     # Media used in this README
+├── config/     # Wallpapers, terminal config, cursor theme, kanshi profile, GRUB theme
+├── scripts/    # Helper scripts (print, wlogout, calendar etc.)
+├── waybar/     # Waybar config and stylesheet
+├── config.conf # Main mango compositor config
+└── install.sh  # Automated installer
 ```
 
-## Known issues
+## Known issue
 
 - `install.sh` may still not work perfectly on every machine — read its output carefully, it logs every adaptation it makes.
-- Monitor names used by kanshi/autostart (e.g. `DP-1`, `HDMI-A-1`) are hardware-specific. Run `wlr-randr` to confirm yours before relying on the two-monitor 
