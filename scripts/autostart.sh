@@ -34,7 +34,7 @@ waypaper --restore &
 kanshi &
 swaync &
 discord &
-spotify &
+spicetify restore backup apply &
 helium-browser &
 wl-clip-persist --clipboard regular --reconnect-tries 0 &
 wl-paste --watch cliphist store &
