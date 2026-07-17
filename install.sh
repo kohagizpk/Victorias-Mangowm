@@ -448,7 +448,10 @@ PACKAGES=(
     mangowm-git
 
     # bar, launcher, menu, clipboard
-    waybar rofi fuzzel wmenu
+    # waybar-git, not waybar: the native mango/workspaces + mango/window
+    # modules are recent additions upstream, the stable release may not have
+    # them yet
+    waybar-git rofi fuzzel wmenu
     wl-clipboard cliphist wl-clip-persist
 
     # terminal, shell
@@ -458,7 +461,7 @@ PACKAGES=(
     nemo pavucontrol nwg-look
 
     # wallpaper, multi-monitor
-    swaybg waypaper kanshi wlr-randr
+    swaybg waypaper
 
     # screenshots
     grim slurp
@@ -651,7 +654,7 @@ if [[ "$DISTRO_FAMILY" == "fedora" ]]; then
         mangowm
         waybar rofi fuzzel foot kitty fish fastfetch
         nemo pavucontrol nwg-look
-        swaybg waypaper kanshi wlr-randr
+        swaybg waypaper
         grim slurp
         dunst swaync libnotify
         swayosd brightnessctl pamixer swayidle
@@ -804,7 +807,7 @@ if [[ "$DISTRO_FAMILY" == "nixos" ]]; then
   environment.systemPackages = with pkgs; [
     waybar rofi fuzzel foot kitty fish fastfetch
     nemo pavucontrol nwg-look
-    swaybg waypaper kanshi wlr-randr
+    swaybg waypaper
     grim slurp
     dunst swaync libnotify
     swayosd brightnessctl pamixer swayidle swaylock-effects
@@ -882,15 +885,23 @@ fi
 #    across repo edits (a quoted "~", which bash never expands; a hardcoded
 #    /home/julia; and, most recently, still pointing at the old
 #    kohagi_personal_configs/wlogout folder after it was renamed to
-#    config/wlogout). Normalize both regardless of which state it's in.
+#    config/wlogout). Normalize both regardless of which state it's in —
+#    kept around because the power button in waybar calls it on click — but
+#    don't depend on running it successfully: copy the theme straight from
+#    the repo to ~/.config/wlogout ourselves too, right now.
 if [[ -f "$WLOGOUT_THEME_SCRIPT" ]]; then
     run_sed -i -E \
         -e 's#^BASE=".*/\.config/mango/(kohagi_personal_configs|config)/wlogout"#BASE="'"${CONFIG_DIR}"'/config/wlogout"#' \
         -e 's#^TARGET=".*/\.config/wlogout"#TARGET="'"${HOME}"'/.config/wlogout"#' \
         "$WLOGOUT_THEME_SCRIPT"
     log_adapt "scripts/wlogout-theme.sh: BASE/TARGET normalized to \$CONFIG_DIR/config/wlogout and \$HOME/.config/wlogout (the file has pointed at a quoted ~, a hardcoded /home/julia, and the old kohagi_personal_configs path across different repo revisions)"
-    # run it once now so ~/.config/wlogout is populated immediately
-    bash "$WLOGOUT_THEME_SCRIPT" >/dev/null 2>&1 || true
+fi
+
+if [[ -d "$CONFIG_DIR/config/wlogout" ]]; then
+    mkdir -p "$HOME/.config/wlogout"
+    cp "$CONFIG_DIR/config/wlogout/"* "$HOME/.config/wlogout/" 2>/dev/null || true
+    ok "~/.config/wlogout populated directly from the repo (not via wlogout-theme.sh)"
+    log_adapt "Copied config/wlogout/* straight to ~/.config/wlogout ourselves instead of depending on wlogout-theme.sh running correctly — that script is still there for the power button's on-click convenience (theme refresh + relaunch), but the initial deployment no longer needs it to succeed"
 fi
 
 # 4) autostart.sh: swayosd-server and the polkit agent don't start on their own
@@ -939,14 +950,32 @@ if [[ -f "$CONFIG_DIR/scripts/volume.sh" ]]; then
     log_adapt "scripts/volume.sh: fixed the mute icon path (the old one doesn't exist anywhere in the repo)"
 fi
 
-# 6) waybar tags/workspaces module: only patch this if the repo still uses the
-#    deprecated dwl/tags module. If it has already moved to ext/workspaces or
-#    custom/tags, leave it alone.
-if [[ -f "$WAYBAR_JSONC" ]] && grep -q '"dwl/tags"' "$WAYBAR_JSONC"; then
-    mkdir -p "$CONFIG_DIR/scripts"
-    cat > "$CONFIG_DIR/scripts/waybar-tags.sh" <<'TAGSEOF'
+# 6) waybar tags/workspaces module. Waybar's own compatibility table lists
+#    full native support for Mango (workspaces, window, layout, language,
+#    mode) via "mango/*" modules talking straight to mango's socket — and
+#    unlike a custom script, the native module correctly shows each
+#    monitor's own tags in a multi-monitor setup instead of always reading
+#    monitor 1. dwl/tags and dwl/window both use the dwl-ipc protocol mango
+#    has deprecated, so upgrade those specifically. If the config already
+#    uses ext/workspaces, leave it — it might already be working, and
+#    there's no reliable way from here to confirm the installed waybar
+#    build is new enough for mango/workspaces without risking a working
+#    setup to find out.
+mkdir -p "$CONFIG_DIR/scripts"
+cat > "$CONFIG_DIR/scripts/waybar-tags.sh" <<'TAGSEOF'
 #!/bin/bash
-# custom/tags module for waybar, reads mmsg directly (mango >= 0.14.0).
+# Fallback custom/tags module for waybar, reads mmsg directly (mango >= 0.14.0).
+# Use this if mango/workspaces isn't recognized by your waybar build (it
+# needs a very recent one). In waybar/config.jsonc:
+#   1) in "modules-left", change "mango/workspaces" to "custom/tags"
+#   2) replace the "mango/workspaces": {...} block with:
+#        "custom/tags": {
+#            "exec": "~/.config/mango/scripts/waybar-tags.sh",
+#            "return-type": "json",
+#            "restart-interval": 0
+#        }
+#      (use the real absolute path instead of ~ — it doesn't reliably
+#      expand in waybar's exec)
 # Format of "mmsg get all-tags" / "mmsg watch all-tags":
 # {"all_tags":[{"monitor":"eDP-1","tags":[{"index":1,"is_active":bool,"is_urgent":bool,"client_count":n}, ...]}]}
 
@@ -980,17 +1009,27 @@ mmsg watch all-tags | while IFS= read -r line; do
     [[ -n "$line" ]] && printf '%s\n' "$line" | render
 done
 TAGSEOF
-    chmod +x "$CONFIG_DIR/scripts/waybar-tags.sh"
+chmod +x "$CONFIG_DIR/scripts/waybar-tags.sh"
 
-    run_sed -i 's/"dwl\/tags",/"custom\/tags",/' "$WAYBAR_JSONC"
+if [[ -f "$WAYBAR_JSONC" ]] && grep -q '"dwl/tags"' "$WAYBAR_JSONC"; then
+    run_sed -i 's/"dwl\/tags",/"mango\/workspaces",/' "$WAYBAR_JSONC"
     run_sed -i '/"dwl\/tags": {/,/^    },/c\
-    "custom/tags": {\
-        "exec": "'"${CONFIG_DIR}"'/scripts/waybar-tags.sh",\
-        "return-type": "json",\
-        "restart-interval": 0\
+    "mango/workspaces": {\
+        "format": "{name}"\
     },' "$WAYBAR_JSONC"
-    log_adapt "waybar/config.jsonc: dwl/tags -> custom/tags reading mmsg directly (dwl-ipc is deprecated in mango, and wlr/workspaces isn't compiled into the Arch/Artix waybar package; exec uses an absolute path because ~ doesn't reliably expand in waybar's exec)"
+    log_adapt "waybar/config.jsonc: dwl/tags -> mango/workspaces (dwl-ipc is deprecated in mango; the native mango/workspaces module also shows each monitor's own tags correctly, which a custom script reading all_tags[0] can't). If it renders blank, your waybar build may be too old for it — a working fallback script is at scripts/waybar-tags.sh, see the comment at its top for how to swap it in (module: custom/tags)"
 fi
+
+if [[ -f "$WAYBAR_JSONC" ]] && grep -q '"dwl/window"' "$WAYBAR_JSONC"; then
+    run_sed -i 's/"dwl\/window"/"mango\/window"/g' "$WAYBAR_JSONC"
+    log_adapt "waybar/config.jsonc: dwl/window -> mango/window (mango's own release notes: dwl-ipc is deprecated, rename dwl/window to mango/window)"
+fi
+
+if [[ -f "$WAYBAR_JSONC" ]] && grep -q '"ext/workspaces"' "$WAYBAR_JSONC"; then
+    info "waybar/config.jsonc already uses ext/workspaces for tags. Mango also has its own mango/workspaces module (properly monitor-aware, per Waybar's own compatibility table) — worth trying if ext/workspaces ever misbehaves with more than one monitor. Left as-is for now since ext/workspaces may already be working."
+fi
+
+
 
 # 7) config.conf: tag 1's tagrule is missing the "tagrule" prefix (a broken
 #    line that has no effect and could confuse the parser)
@@ -1037,6 +1076,38 @@ fi
 
 ok "Corrections applied"
 
+# 11) config.conf: SUPER+W is bound to "helium-browsers" (extra "s") — the
+#     package/binary is "helium-browser", so this keybind has never worked.
+if [[ -f "$CONFIG_DIR/config.conf" ]] && grep -qx 'bind=SUPER,w,spawn,helium-browsers' "$CONFIG_DIR/config.conf"; then
+    run_sed -i 's/^bind=SUPER,w,spawn,helium-browsers$/bind=SUPER,w,spawn,helium-browser/' "$CONFIG_DIR/config.conf"
+    log_adapt "config.conf: bind=SUPER,w,spawn,helium-browsers -> helium-browser (typo — the binary doesn't have a trailing 's', so this keybind silently did nothing)"
+fi
+
+# 12) scripts/print.sh has no shebang. mango spawns it via execvp(), and
+#     glibc happens to fall back to /bin/sh when execve() fails with ENOEXEC
+#     (no shebang) — that's real, documented POSIX behavior, so it currently
+#     works, but it's fragile (breaks on musl-based systems, for example)
+#     and one `chmod +x` + direct invocation away from failing outright.
+if [[ -f "$CONFIG_DIR/scripts/print.sh" ]] && ! head -1 "$CONFIG_DIR/scripts/print.sh" | grep -q '^#!'; then
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        printf "  ${c_dim}would add shebang to:${c_reset} %s\n" "$CONFIG_DIR/scripts/print.sh"
+    else
+        printf '#!/bin/sh\n%s' "$(cat "$CONFIG_DIR/scripts/print.sh")" > "$CONFIG_DIR/scripts/print.sh"
+    fi
+    log_adapt "scripts/print.sh: added a missing #!/bin/sh shebang (it worked by accident — glibc's execvp() falls back to /bin/sh on a missing shebang, but that's not guaranteed on every libc)"
+fi
+
+# 13) autostart.sh: kanshi isn't installed anymore — monitor layout is now
+#     handled natively by mango's own monitorrule= in config.conf (see the
+#     "Monitor detection" step below), so this line would just be a
+#     harmless "command not found" at best. Comment it out instead of
+#     leaving that in every boot log.
+if [[ -f "$AUTOSTART" ]] && grep -qx 'kanshi &' "$AUTOSTART"; then
+    run_sed -i 's/^kanshi &$/# kanshi & # replaced by monitorrule= in config.conf, see install.sh/' "$AUTOSTART"
+    log_adapt "scripts/autostart.sh: commented out 'kanshi &' — monitor layout now lives in config.conf via mango's native monitorrule=, kanshi isn't installed by this script anymore"
+fi
+
+
 # ---------- CPU temperature sensor (waybar) ----------
 step "Detecting the CPU sensor for waybar"
 hwmon_path=""
@@ -1058,63 +1129,30 @@ else
     warn "Couldn't auto-detect the sensor. Set 'hwmon-path' in $WAYBAR_JSONC by hand (run 'sensors' or check /sys/class/hwmon/*/name)."
 fi
 
-# ---------- monitor detection (kanshi profile, native/max resolution+refresh) ----------
-step "Monitor detection"
-DETECTED_OUTPUTS=()
-DETECTED_WIDTHS=()
-for status_file in /sys/class/drm/card*-*/status; do
-    [[ -r "$status_file" ]] || continue
-    [[ "$(cat "$status_file" 2>/dev/null)" == "connected" ]] || continue
-    conn_dir="$(dirname "$status_file")"
-    raw_name="$(basename "$conn_dir")"
-    out_name="${raw_name#card*-}"
-    out_width=1920
-    if [[ -r "$conn_dir/modes" ]]; then
-        first_mode="$(head -1 "$conn_dir/modes" 2>/dev/null || true)"
-        [[ "$first_mode" == *x* ]] && out_width="${first_mode%%x*}"
+# ---------- monitors: auto-monitors.sh (not kanshi, not wlr-randr) ----------
+# kanshi and wlr-randr both need the wlr-output-management-unstable-v1
+# protocol, which mango doesn't implement — neither one actually works here.
+# The repo's own scripts/auto-monitors.sh handles this correctly instead:
+# it reads real monitor state from "mmsg get all-monitors" (mango's own
+# IPC), writes monitorrule= lines into config.conf inside a marked block,
+# and (with --watch, which is how autostart.sh calls it) reapplies on every
+# hotplug automatically. Nothing to ask the user here — just make sure it
+# can actually find mango's socket.
+step "Monitor layout (auto-monitors.sh)"
+AUTO_MONITORS_SCRIPT="$CONFIG_DIR/scripts/auto-monitors.sh"
+if [[ -f "$AUTO_MONITORS_SCRIPT" ]]; then
+    if ! grep -q "MANGO_INSTANCE_SIGNATURE:-" "$AUTO_MONITORS_SCRIPT"; then
+        run_sed -i '/^apply_layout() {/a\
+\tif [ -z "${MANGO_INSTANCE_SIGNATURE:-}" ]; then\
+\t\tsig="$(find "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" /tmp -maxdepth 2 -type s -iname '"'"'*mango*'"'"' 2>/dev/null | head -1)"\
+\t\t[ -n "$sig" ] \&\& export MANGO_INSTANCE_SIGNATURE="$sig"\
+\tfi' "$AUTO_MONITORS_SCRIPT"
+        log_adapt "scripts/auto-monitors.sh: added the same MANGO_INSTANCE_SIGNATURE auto-detection as waybar-tags.sh — it wasn't always inherited from the parent process on -git builds, which would make apply_layout silently give up on the very first run"
     fi
-    DETECTED_OUTPUTS+=("$out_name")
-    DETECTED_WIDTHS+=("$out_width")
-done
-
-OUTPUTS=()
-WIDTHS=()
-if [[ "${#DETECTED_OUTPUTS[@]}" -gt 0 ]]; then
-    info "Detected connected output(s): ${DETECTED_OUTPUTS[*]}"
-    if confirm "Use these for the kanshi profile?"; then
-        OUTPUTS=("${DETECTED_OUTPUTS[@]}")
-        WIDTHS=("${DETECTED_WIDTHS[@]}")
-    fi
+    chmod +x "$AUTO_MONITORS_SCRIPT"
+    ok "Layout is handled live by auto-monitors.sh --watch (already wired into autostart.sh) — nothing hardcoded here"
 else
-    warn "No connected output found automatically (checked /sys/class/drm/*/status)."
-fi
-
-if [[ "${#OUTPUTS[@]}" -eq 0 ]]; then
-    read -rp "Enter your monitor output name(s), space-separated (e.g. DP-1 HDMI-A-1), or leave empty to skip: " -a OUTPUTS
-    for _ in "${OUTPUTS[@]}"; do WIDTHS+=(1920); done
-fi
-
-if [[ "${#OUTPUTS[@]}" -gt 0 ]]; then
-    mkdir -p "$HOME/.config/kanshi"
-    {
-        echo "profile auto {"
-        x=0
-        for i in "${!OUTPUTS[@]}"; do
-            echo "    output ${OUTPUTS[$i]} enable position $x,0"
-            x=$((x + WIDTHS[i]))
-        done
-        echo "}"
-    } > "$HOME/.config/kanshi/config"
-    ok "kanshi profile written for: ${OUTPUTS[*]}"
-    info "No explicit mode was set on purpose: the compositor will use each display's native/preferred mode, which is normally its maximum resolution and refresh rate."
-    log_adapt "kanshi: auto-generated a profile for the detected output(s) (${OUTPUTS[*]}) instead of the repo's hardcoded DP-1/HDMI-A-1 profile, using each display's native mode (max resolution+Hz) rather than a fixed one"
-else
-    warn "No monitor configured for kanshi. Falling back to the repo's bundled two-monitor profile (DP-1 + HDMI-A-1) as a starting point — edit ~/.config/kanshi/config if your outputs are named differently."
-    KANSHI_SRC="$CONFIG_DIR/config/kanshi (if_u_have_2_monitors)/config"
-    if [[ -f "$KANSHI_SRC" ]]; then
-        mkdir -p "$HOME/.config/kanshi"
-        cp "$KANSHI_SRC" "$HOME/.config/kanshi/config"
-    fi
+    warn "scripts/auto-monitors.sh not found in this checkout — multi-monitor layout won't be configured automatically. mango has its own monitorrule= directive in config.conf if you want to set one up by hand (see mango's docs, Configuration > Monitors)."
 fi
 
 # ---------- keyboard layout (asked earlier, applied now) ----------
@@ -1382,7 +1420,7 @@ if [[ "${#ADAPTATIONS[@]}" -gt 0 ]]; then
     done
 fi
 printf "\n${c_bold}${c_yellow}Worth double-checking by hand${c_reset}\n"
-info "Monitor output names picked for kanshi: ${OUTPUTS[*]:-none} — run 'wlr-randr' once mango is running to confirm they match"
+info "Multi-monitor layout: handled live by scripts/auto-monitors.sh --watch — check its log with 'journalctl' or just run it by hand (no --watch) to see what it detected"
 info "The Animated-Mew-Cursor theme, if it wasn't already installed (see the warning above)"
 info "Pick a wallpaper with SUPER+F (waypaper) any time you want to change it"
 echo
