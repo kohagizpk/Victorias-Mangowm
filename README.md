@@ -1,49 +1,65 @@
 # Victoria's MangoWM Dotfiles
 
-Personal dotfiles for a [mango](https://github.com/DreamMaoMao/mango) (dwl-based Wayland compositor) desktop, tuned for Arch-based systems. Styled with Waybar, a full Wayland utility stack, and an installer that adapts itself to your init system.
+Personal dotfiles for a [mango](https://github.com/mangowm/mango) (dwl-based Wayland compositor) desktop — Waybar, a full Wayland utility stack, GRUB theming, and an installer that adapts itself to your distro, your init system, and your hardware.
 
 https://github.com/user-attachments/assets/cb902017-0d69-4222-970d-5467773197c4
 
 ## Features
 
-- **Window manager:** [mango](https://github.com/DreamMaoMao/mango) — a dwl-based Wayland compositor
-- **Status bar:** Waybar, with a CPU temperature sensor that is auto-detected on install, MPRIS media controls, and a calendar popup
-- **App launcher:** rofi
-- **Clipboard manager:** cliphist, picked through fuzzel
-- **Notifications & OSD:** swaync/dunst for notifications, swayosd for on-screen volume and brightness feedback
+- **Window manager:** [mango](https://github.com/mangowm/mango) — a dwl-based Wayland compositor
+- **Status bar:** Waybar, with a CPU temperature sensor auto-detected on install, a live tags module read straight from mango's own IPC, MPRIS media controls, and a calendar popup
+- **App launcher:** rofi, plus fuzzel for the clipboard picker
+- **Clipboard manager:** cliphist
+- **Notifications & OSD:** swaync for notifications, swayosd for on-screen volume/brightness feedback
 - **Screenshots:** grim + slurp
-- **Logout menu:** wlogout
-- **Multi-monitor:** kanshi, with a saved profile for two-monitor setups
-- **Shell:** fish, showing fastfetch and a random image on every new terminal
+- **Logout menu:** wlogout, themed
+- **Wallpaper:** waypaper (SUPER+F), with a bundled fallback wallpaper for the first boot
+- **Multi-monitor:** kanshi — your connected outputs are detected automatically and written into a profile using each display's native (i.e. maximum) resolution and refresh rate, no hardcoded numbers
+- **Keyboard layout:** picked from a short menu during install and applied both to mango (`xkb_rules_layout`/`xkb_rules_variant`) and to the raw console (`/etc/vconsole.conf`), so it's consistent whether you're at a bare TTY or inside the graphical session
+- **GTK theming:** Materia-dark applied the same way `nwg-look` would (gtk-3.0/gtk-4.0 `settings.ini`, `~/.gtkrc-2.0`, `GTK_THEME` env var)
+- **Shell:** fish, with the greeting disabled and fastfetch shown on every new terminal
 - **Terminal:** kitty
 - **Cursor theme:** Animated-Mew-Cursor
-- **Bootloader theming (optional):** UltraGrub GRUB theme, plus a patch that cleans up boot entries (e.g. tidies the Windows entry)
-- **Init-system aware installer:** detects and supports systemd, OpenRC, and dinit, and configures elogind for seat management automatically when you're not on systemd
+- **Bootloader theming (optional):** UltraGrub GRUB theme, plus a patch that cleans up boot entries (e.g. tidies the Windows entry for dual-boot)
+- **Display manager (optional):** [ly](https://github.com/fairyglade/ly), set up so Mango is the only session in the list
+- **Discord screen sharing** wired up correctly (`--ozone-platform=wayland` + PipeWire capturer) wherever Discord gets launched from
+
+### The installer
+
+- **Multi-distro:** Arch/Artix/CachyOS/EndeavourOS (pacman), Fedora (dnf, best-effort), and NixOS (writes a config snippet instead of installing anything imperatively, since that's not how NixOS works)
+- **Init-system aware:** detects systemd / OpenRC / dinit and sets up `elogind` for seat management automatically when you're not on systemd
+- **Adds Arch's own repos when it makes sense:** on an Arch-based distro that doesn't already ship Arch's `[core]`/`[extra]` (e.g. Artix — CachyOS/EndeavourOS already have them, so this is a no-op there), offers to add them with a mirrorlist matched to your existing region
+- **`--dry-run`:** shows every command and file change it would make without touching your system
+- **Doesn't nag for your password 20 times:** asks once up front and keeps the sudo session alive for the rest of the run
+- **Safe to re-run:** already-installed packages and already-applied fixes are skipped, not repeated
 
 ## Keybindings
 
 | Keybind            | Action                                 |
-| ------------------ | -------------------------------------- |
-| SUPER + D          | App launcher (rofi)                    |
-| SUPER + 1...9      | Change workspace                       |
-| ALT + 1..9         | Move program to workspace              |
-| SUPER + V          | Clipboard history (cliphist + fuzzel)  |
-| SUPER + Shift + S  | Screenshot                             |
-| SUPER + Enter      | Terminal (kitty)                       |
-| SUPER + E          | File manager (nemo)                    |
-| SUPER + W          | Browser (helium)                       |
-| SUPER + A          | Discord                                |
-| SUPER + S          | Spotify                                |
-| SUPER + F          | Wallpaper selector (waypaper)          |
-| SUPER + Q          | Close active window                    |
-| ALT + F            | Toggle fullscreen                      |
-| ALT + M            | Quit window manager                    |
+| ------------------- | --------------------------------------- |
+| SUPER + D           | App launcher (rofi)                    |
+| SUPER + 1...9       | Change tag/workspace                   |
+| ALT + 1...9         | Move program to tag/workspace          |
+| SUPER + V           | Clipboard history (cliphist + fuzzel)  |
+| SUPER + Shift + S   | Screenshot                             |
+| SUPER + Enter       | Terminal (kitty)                       |
+| SUPER + E           | File manager (nemo)                    |
+| SUPER + W           | Browser (Helium)                       |
+| SUPER + A           | Discord                                |
+| SUPER + S           | Spotify                                |
+| SUPER + F           | Wallpaper selector (waypaper)          |
+| SUPER + Q           | Close active window                    |
+| ALT + F             | Toggle fullscreen                      |
+| ALT + M             | Quit window manager                    |
+| ALT + Tab           | Toggle overview                        |
 
 ## Requirements
 
-- Arch, Artix, CachyOS, or any other pacman-based distro
-- An AUR helper (`yay` or `paru`) — the installer will offer to install `yay` for you if neither is found
-- `git`
+Pick whichever matches your system — the installer detects it automatically:
+
+- **Arch-based:** Arch, Artix, CachyOS, EndeavourOS, or any other pacman-based distro, plus `git`. An AUR helper (`yay` or `paru`) is offered automatically if neither is found.
+- **Fedora:** a recent release with `dnf` and `git`. Package coverage here is best-effort — anything that fails to install is reported at the end instead of silently breaking the run.
+- **NixOS:** any recent generation. The installer writes a config snippet instead of installing packages; you add it to your flake/configuration.nix and rebuild yourself.
 
 ## How to install?
 
@@ -54,28 +70,47 @@ chmod +x install.sh
 ./install.sh
 ```
 
-The script is interactive and will ask for confirmation before any potentially destructive step. Here's what it does, in order:
+Want to see what it would do first, without changing anything?
 
-1. Detects your init system (systemd / OpenRC / dinit) and, if you're not on systemd, sets up `elogind` so mango can access DRM/input through libseat.
-2. Installs an AUR helper (`yay`) automatically if you don't already have one.
-3. Installs every required package: the compositor, Waybar, launchers, portals, the PipeWire audio stack, fonts, and bundled apps (Discord, Spotify, Helium browser).
-4. Patches a handful of paths and commands that were specific to the original machine (wallpaper paths, systemd-only power commands, a couple of missing binaries) so the config works out of the box on a fresh install.
-5. Auto-detects your CPU temperature sensor and wires it into the Waybar config.
-6. Sets up fastfetch, kanshi, and the terminal welcome script in their proper locations outside `~/.config/mango`.
-7. Optionally installs the UltraGrub GRUB theme, adds your user to the `video` group (needed for brightness control via swayosd), and sets fish as your default shell.
+```bash
+./install.sh --dry-run
+```
+
+The script is interactive: it walks you through a few quick choices up front (keyboard layout, and an AUR helper if you don't have one), shows a summary of everything it's about to do, and only then asks you to confirm and starts working. Here's the gist of what happens, in order:
+
+1. Checks you have an internet connection and aren't running as root.
+2. Detects your distro family and, on Arch-based systems, your init system — asking only if it can't tell.
+3. Asks for your keyboard layout once, up front.
+4. Asks for your sudo password once, and keeps the session alive for the rest of the run instead of prompting repeatedly.
+5. On an Arch-based distro without Arch's own `[core]`/`[extra]` repos (Artix, mainly), offers to add them with a mirrorlist matched to your region.
+6. Installs everything: the compositor, Waybar, launchers, portals, the PipeWire audio stack, GTK theming, fonts (including real Nerd Font icon glyphs, even on Fedora where the packaged font doesn't have them), and bundled apps.
+7. Deploys the dotfiles to `~/.config/mango` and patches the handful of things that don't work as committed — wrong paths after folder renames, commands left over from a different compositor, a keybind that outlived the package it referred to, that sort of thing. Every patch is logged and printed in the summary at the end.
+8. Auto-detects your CPU temperature sensor and your connected monitors, and wires both into the config with no hardcoded values.
+9. Sets up the display manager (`ly`), the cursor theme, and — optionally — the GRUB theme, your default shell, and the `video` group permission brightness control needs.
+10. Runs a health check at the end and tells you plainly if anything's missing.
 
 ## Repository structure
 
 ```
 .
 ├── assets/     # Media used in this README
-├── config/     # Wallpapers, terminal config, cursor theme, kanshi profile, GRUB theme
-├── scripts/    # Helper scripts (print, wlogout, calendar etc.)
+├── config/     # Wallpapers, terminal config, cursor theme, kanshi profile, rofi/fuzzel theme, GRUB theme
+├── scripts/    # Helper scripts (autostart, volume/brightness OSD, wlogout theming, calendar, print)
+├── wallpaper/  # Bundled wallpapers
 ├── waybar/     # Waybar config and stylesheet
 ├── config.conf # Main mango compositor config
 └── install.sh  # Automated installer
 ```
 
-## Known issue
+## Known issues
 
-- `install.sh` may still not work perfectly on every machine — read its output carefully, it logs every adaptation it makes.
+- `config/Animated-Mew-Cursor/index.theme` and `cursor.theme` are currently saved as rich-text documents instead of plain text (probably edited in a word processor by accident). The actual cursor files still work, but GTK apps may not list the theme correctly until these two are re-saved as plain text.
+- Two `mousebind=NONE,...` lines for `btn_left`/`btn_right` in `config.conf` are commented out by the installer — mango can't bind those two buttons with no modifier at all (a known upstream limitation, not a config mistake). Both actions already have working keybinds elsewhere (`ALT+Tab`, `SUPER+Q`).
+- `install.sh` may still not behave perfectly on every machine — read its output carefully, it logs every adaptation it makes, and it's always safe to run again.
+
+## Credits
+
+- [mango](https://github.com/mangowm/mango) by DreamMaoMao and contributors
+- [UltraGrub](https://github.com/YouStones/ultrakill-grub-theme) GRUB theme
+- [Nerd Fonts](https://www.nerdfonts.com/) for the icon glyphs
+- [Animated Mew Cursor](https://www.gnome-look.org/c/2326996) cursor theme

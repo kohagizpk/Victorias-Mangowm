@@ -31,7 +31,7 @@ sleep 0.8
 
 waybar -c ~/.config/mango/waybar/config.jsonc -s ~/.config/mango/waybar/style.css >/dev/null 2>&1 &
 waypaper --restore &
-kanshi &
+~/.config/mango/scripts/auto-monitors.sh --watch &
 swaync &
 discord &
 spicetify restore backup apply &
