@@ -6,7 +6,7 @@
     "spacing": 0,
 
     "modules-left": [
-        "ext/workspaces",
+        "mango/workspaces",
         "custom/sep",
         "pulseaudio#mic",
         "pulseaudio#audio",
@@ -18,6 +18,7 @@
         "tray"
     ],
     "modules-right": [
+        "battery",
         "network",
         "temperature",
         "custom/sep",
@@ -26,12 +27,16 @@
         "custom/power"
     ],
 
-    "ext/workspaces": {
-        "format": "{name}",
-        "ignore-hidden": false,
+    // Módulo nativo mango/workspaces (substitui ext/workspaces e o antigo dwl/tags).
+    // Requer waybar buildado a partir do commit mais recente (waybar-git) — a
+    // integração com mango ainda não saiu em nenhum release taggeado do waybar.
+    "mango/workspaces": {
+        "format": "{index}",
         "on-click": "activate",
-        "on-click-right": "deactivate",
-        "sort-by-id": true
+        "on-click-right": "toggle",
+        "hide-empty": false,
+        "current-only": false,
+        "overview-label": "OVERVIEW"
     },
 
     "tray": {
@@ -116,11 +121,15 @@
         "tooltip": false
     },
     
-    "dwl/window": {
-        "format": "{}",
+    // dwl/window -> mango/window: o dwl-ipc foi descontinuado no mango, o próprio
+    // changelog pede pra trocar o prefixo. OBS: este bloco não está em nenhum
+    // modules-left/center/right hoje, então o título da janela já não aparecia
+    // na barra antes disso também — deixei do jeito que estava, só corrigido.
+    "mango/window": {
+        "format": "{title}",
         "max-length": 30,
         "rewrite": {
-            "": "Desktop"
+            "^$": "Desktop"
         }
     },
 

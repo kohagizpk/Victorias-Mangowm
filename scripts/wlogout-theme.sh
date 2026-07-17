@@ -1,6 +1,6 @@
 #!/bin/bash
 
-BASE="$HOME/.config/mango/kohagi_personal_configs/wlogout"
+BASE="$HOME/.config/mango/config/wlogout"
 TARGET="$HOME/.config/wlogout"
 
 mkdir -p "$TARGET"

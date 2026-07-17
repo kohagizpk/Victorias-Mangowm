@@ -290,7 +290,7 @@ tooltip {
     border-bottom: none;
 }
 
-#workspaces button.hidden:not(.active) {
+#workspaces button.empty:not(.active) {
     color: #444459;
     border-bottom: none;
 }
