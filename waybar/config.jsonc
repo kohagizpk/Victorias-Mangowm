@@ -18,7 +18,6 @@
         "tray"
     ],
     "modules-right": [
-        "battery",
         "network",
         "temperature",
         "custom/sep",
@@ -27,9 +26,6 @@
         "custom/power"
     ],
 
-    // Módulo nativo mango/workspaces (substitui ext/workspaces e o antigo dwl/tags).
-    // Requer waybar buildado a partir do commit mais recente (waybar-git) — a
-    // integração com mango ainda não saiu em nenhum release taggeado do waybar.
     "mango/workspaces": {
         "format": "{index}",
         "on-click": "activate",
@@ -136,7 +132,7 @@
     "custom/power": {
         "format": "⏻",
         "tooltip": false,
-        "on-click": "bash ~/.config/mango/scripts/wlogout-theme.sh",
+        "on-click": "wlogout",
         "on-click-right": "systemctl poweroff",
         "on-click-middle": "systemctl reboot"
     },
